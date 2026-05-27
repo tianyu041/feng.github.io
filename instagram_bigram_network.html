@@ -3,17 +3,16 @@
 # 用法：接在原有分析流程之後執行，bigram_counts 須已存在
 # 套件需求：jsonlite（install.packages("jsonlite")）
 # =============================================================================
-git clone https://github.com/username/repository-name.git
-cd repository-name
+
 suppressPackageStartupMessages({
   library(jiebaR)
   library(dplyr)
   library(jsonlite)
 })
 
-# ── 參數 ──────────────────────────────────────────────────────────────────────
+# ── 參數設定 ──────────────────────────────────────────────────────────────────
 TOP_N       <- 500
-OUTPUT_PATH <- "C:\\Users\\ASUS\\Downloads\\instagram_bigram_network.html"
+OUTPUT_PATH <- "index.html"
 
 # ── 白名單更新 ────────────────────────────────────────────────────────────────
 protected_unigrams_extra <- c("貼文", "貼圖", "圖層", "頭貼", "限動")
@@ -56,14 +55,9 @@ sentiment_dict <- bind_rows(
   data.frame(word = neg_words, sentiment_score = -1L, stringsAsFactors = FALSE)
 ) %>% distinct(word, .keep_all = TRUE)
 
-cat("情感詞典：正面", sum(sentiment_dict$sentiment_score == 1),
-    "/ 負面", sum(sentiment_dict$sentiment_score == -1), "\n\n")
-
 # =============================================================================
 # 步驟 2 — Top-N bigram + 情感標注
 # =============================================================================
-cat("準備 Top-", TOP_N, " bigram...\n", sep = "")
-
 stopifnot(exists("bigram_counts"),
           all(c("word1","word2","n") %in% names(bigram_counts)))
 
@@ -84,8 +78,6 @@ top_bigrams <- bigram_counts %>%
       TRUE              ~ "neutral"
     )
   )
-
-cat("情感分布：\n"); print(table(top_bigrams$sentiment)); cat("\n")
 
 # =============================================================================
 # 步驟 3 — 節點頻率與情感（多數決）
@@ -111,8 +103,6 @@ node_freq <- bind_rows(
   left_join(node_sentiment_raw, by = "word") %>%
   mutate(node_sentiment = ifelse(is.na(node_sentiment), "neutral", node_sentiment))
 
-cat("節點：", nrow(node_freq), "/ 邊：", nrow(top_bigrams), "\n\n")
-
 # =============================================================================
 # 步驟 4 — JSON 序列化
 # =============================================================================
@@ -133,24 +123,21 @@ links_json <- as.character(toJSON(
 
 # =============================================================================
 # 步驟 5 — 組合 HTML
-#   全程使用 paste0()，分段拼接，避免任何引號或百分號衝突
-#   最後用 writeLines(con = file(..., encoding="UTF-8")) 確保中文正確寫出
 # =============================================================================
 title_text <- paste0("Instagram \u8a55\u8ad6 Bigram \u60c5\u611f\u7db2\u8def\u5716\uff08Top ", TOP_N, "\uff09")
 
-# ── A: HTML + CSS ─────────────────────────────────────────────────────────────
-p <- function(...) paste0(...)   # 簡寫
+p <- function(...) paste0(...)
 
 html_css <- p(
 '* { box-sizing: border-box; margin: 0; padding: 0; }',
 'body {',
 '  font-family: "Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;',
-'  background: #f4f3fb; color: #2c2c2a;',
+'  background: #ffffff; color: #2c2c2a;',
 '  height: 100vh; display: flex; flex-direction: column;',
 '}',
 '#header {',
-'  padding: 10px 18px 9px; border-bottom: 1px solid #dddcf4;',
-'  background: #fff; display: flex; flex-wrap: wrap; align-items: center; gap: 12px;',
+'  padding: 10px 18px 9px; border-bottom: 1px solid #eaeaea;',
+'  background: #ffffff; display: flex; flex-wrap: wrap; align-items: center; gap: 12px;',
 '}',
 '#header h1 { font-size: 14px; font-weight: 600; color: #26215c; white-space: nowrap; }',
 '.ctrl-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #5f5e5a; }',
@@ -179,13 +166,13 @@ html_css <- p(
 '.leg-item { display: flex; align-items: center; gap: 4px; }',
 '.leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }',
 '#hint { font-size: 10px; color: #b4b2a9; white-space: nowrap; }',
-'#graph-wrap { flex: 1; overflow: hidden; position: relative; background: #f4f3fb; }',
+'#graph-wrap { flex: 1; overflow: hidden; position: relative; background: #ffffff; }',
 'svg { display: block; width: 100%; height: 100%; }',
 '#tooltip {',
-'  position: fixed; background: #fff; border: 1px solid #dddcf4;',
+'  position: fixed; background: #fff; border: 1px solid #eaeaea;',
 '  border-radius: 8px; padding: 7px 12px; font-size: 12px;',
 '  pointer-events: none; opacity: 0; transition: opacity .12s;',
-'  color: #26215c; box-shadow: 0 2px 10px rgba(83,74,183,.13);',
+'  color: #26215c; box-shadow: 0 2px 10px rgba(0,0,0,.08);',
 '  max-width: 210px; line-height: 1.7; z-index: 9999;',
 '}'
 )
@@ -226,7 +213,6 @@ html_structure <- p(
 '<script>'
 )
 
-# ── B: JavaScript（全部用 paste0 拼，不用單引號包大段）────────────────────────
 js_data <- p(
 'const nodesData = ', nodes_json, ';',
 'const linksData = ', links_json, ';'
@@ -435,16 +421,7 @@ full_html <- p(
 
 # =============================================================================
 # 步驟 6 — 寫出 HTML
-#   使用 file(encoding = "UTF-8") 確保 Windows 上中文字元正確輸出
 # =============================================================================
 con <- file(OUTPUT_PATH, open = "w", encoding = "UTF-8")
 writeLines(full_html, con = con, useBytes = FALSE)
 close(con)
-
-cat("===========================================================\n")
-cat("HTML 已儲存至：\n  ", OUTPUT_PATH, "\n")
-cat("===========================================================\n")
-cat("配色：正面=珊瑚橙 / 中性=靛紫 / 負面=青綠\n")
-cat("用瀏覽器開啟 HTML 即可互動。\n\n")
-
-# browseURL(OUTPUT_PATH)
