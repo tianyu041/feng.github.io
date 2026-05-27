@@ -1,425 +1,677 @@
+cat > /mnt/user-data/outputs/index.html << 'HTMLEOF'
 <!DOCTYPE html>
-suppressPackageStartupMessages({
-  library(jiebaR)
-  library(dplyr)
-  library(jsonlite)
-})
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instagram 評論 Bigram 情感網路圖</title>
+<style>
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-# ── 參數設定 ──────────────────────────────────────────────────────────────────
-TOP_N       <- 500
-OUTPUT_PATH <- "index.html"
-
-# ── 白名單更新 ────────────────────────────────────────────────────────────────
-protected_unigrams_extra <- c("貼文", "貼圖", "圖層", "頭貼", "限動")
-if (exists("worker")) {
-  for (term in protected_unigrams_extra) new_user_word(worker, term)
-  cat("白名單已更新：", paste(protected_unigrams_extra, collapse = " / "), "\n\n")
-} else {
-  message("警告：worker 尚未初始化，請在完整分析流程後執行。")
+/* ── Base ── */
+body {
+  font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC",
+               "Helvetica Neue", Arial, sans-serif;
+  background: #ffffff;
+  color: #1a1a1a;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-# =============================================================================
-# 步驟 1 — 情感詞典（NTUSD 精簡版，內建）
-# =============================================================================
-pos_words <- unique(c(
-  "喜歡","好用","方便","順暢","穩定","喜愛","推薦","棒","讚","優質","清晰",
-  "完美","舒服","流暢","精美","漂亮","美觀","好看","順手","超棒","很棒",
-  "滿意","開心","愉快","高興","不錯","好評","優秀","出色","厲害","強大",
-  "有趣","豐富","貼心","實用","簡潔","直覺","易用","親切","可愛","精緻",
-  "細膩","順利","快速","及時","準確","有效","靈活","輕鬆","省時","加分",
-  "進步","改善","提升","成功","滿足","感謝","稱讚","肯定","支持","愛用",
-  "好棒","超讚","真心","期待","驚喜","超好","輕便","高效","清楚","友善",
-  "溫馨","安心","放心","信任","保障","安全"
-))
+/* ── Header toolbar ── */
+#header {
+  padding: 10px 20px;
+  border-bottom: 1px solid #e8e8e8;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  z-index: 10;
+  flex-shrink: 0;
+}
 
-neg_words <- unique(c(
-  "爛","差","糟","慢","卡","閃退","崩潰","當機","黑屏","白屏","卡頓",
-  "失敗","異常","錯誤","故障","損壞","消失","無法","不行","不能",
-  "難用","麻煩","複雜","混亂","困難","費時","費力","浪費","無用","沒用",
-  "垃圾","爛透","差勁","糟糕","劣質","醜","難看","過時","老舊","落後",
-  "延遲","中斷","斷線","無語","傻眼","氣死","討厭","厭惡","煩死","很煩",
-  "超煩","煩躁","生氣","憤怒","沮喪","失望","難過","傷心","糟透","差透",
-  "噁心","可惡","荒謬","莫名","奇怪","詭異","坑","騙人","欺騙","扣分",
-  "退步","降低","破壞","毀掉","被鎖","停權","封號","下架","強制","廣告",
-  "騷擾","干擾","侵犯","洩漏","盜用","被盜","不安","焦慮","擔心","危險",
-  "不穩","不良","惡化","智障","三小","白痴","蠢","笨"
-))
+#header h1 {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+  white-space: nowrap;
+  letter-spacing: .01em;
+}
 
-sentiment_dict <- bind_rows(
-  data.frame(word = pos_words, sentiment_score =  1L, stringsAsFactors = FALSE),
-  data.frame(word = neg_words, sentiment_score = -1L, stringsAsFactors = FALSE)
-) %>% distinct(word, .keep_all = TRUE)
+.ctrl-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #555;
+}
 
-# =============================================================================
-# 步驟 2 — Top-N bigram + 情感標注
-# =============================================================================
-stopifnot(exists("bigram_counts"),
-          all(c("word1","word2","n") %in% names(bigram_counts)))
+.ctrl-group label { white-space: nowrap; font-weight: 500; }
 
-top_bigrams <- bigram_counts %>%
-  arrange(desc(n)) %>%
-  slice_head(n = TOP_N) %>%
-  left_join(sentiment_dict, by = c("word1" = "word")) %>%
-  rename(score1 = sentiment_score) %>%
-  left_join(sentiment_dict, by = c("word2" = "word")) %>%
-  rename(score2 = sentiment_score) %>%
-  mutate(
-    score1      = ifelse(is.na(score1), 0L, score1),
-    score2      = ifelse(is.na(score2), 0L, score2),
-    total_score = score1 + score2,
-    sentiment   = case_when(
-      total_score >=  1 ~ "positive",
-      total_score <= -1 ~ "negative",
-      TRUE              ~ "neutral"
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 90px;
+  height: 3px;
+  border-radius: 2px;
+  background: #ddd;
+  outline: none;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: #4a3fbb;
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1.5px #4a3fbb;
+}
+input[type=range]::-moz-range-thumb {
+  width: 13px; height: 13px;
+  border-radius: 50%;
+  background: #4a3fbb;
+  cursor: pointer;
+  border: 2px solid #fff;
+}
+
+.val-badge {
+  min-width: 30px;
+  text-align: right;
+  font-weight: 700;
+  color: #4a3fbb;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+#reset-btn {
+  padding: 4px 11px;
+  border: 1.5px solid #c5c0f0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4a3fbb;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s, border-color .15s;
+  white-space: nowrap;
+}
+#reset-btn:hover { background: #f0eeff; border-color: #9b94e8; }
+
+/* ── Legend ── */
+#legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 11px;
+  color: #444;
+}
+.leg-item { display: flex; align-items: center; gap: 5px; font-weight: 500; }
+.leg-dot  { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+
+#hint {
+  font-size: 10px;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+/* ── Graph canvas ── */
+#graph-wrap {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  background: #ffffff;
+}
+svg { display: block; width: 100%; height: 100%; }
+
+/* ── Tooltip ── */
+#tooltip {
+  position: fixed;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 9px;
+  padding: 8px 13px;
+  font-size: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .12s;
+  color: #1a1a1a;
+  box-shadow: 0 4px 16px rgba(0,0,0,.10);
+  max-width: 220px;
+  line-height: 1.75;
+  z-index: 9999;
+}
+</style>
+</head>
+
+<body>
+<div id="header">
+  <h1>Instagram &#35413;&#35542; Bigram &#24773;&#24863;&#32178;&#36335;&#22294;&#65288;Top 500&#65289;</h1>
+
+  <div class="ctrl-group">
+    <label for="repulsion">&#x27F2; &#26579;&#21147;</label>
+    <input type="range" id="repulsion" min="-1200" max="-30" value="-320" step="10">
+    <span class="val-badge" id="rep-val">320</span>
+  </div>
+
+  <div class="ctrl-group">
+    <label for="linklen">&#x21D4; &#36899;&#32080;</label>
+    <input type="range" id="linklen" min="30" max="300" value="90" step="5">
+    <span class="val-badge" id="len-val">90</span>
+  </div>
+
+  <button id="reset-btn" onclick="resetLayout()">&#x21BA; &#37325;&#32622;&#20043;&#23616;</button>
+
+  <div id="legend">
+    <div class="leg-item">
+      <div class="leg-dot" style="background:#d85a30"></div>&#27491;&#38754;
+    </div>
+    <div class="leg-item">
+      <div class="leg-dot" style="background:#4a3fbb"></div>&#20013;&#24615;
+    </div>
+    <div class="leg-item">
+      <div class="leg-dot" style="background:#0f6e56"></div>&#36093;&#38754;
+    </div>
+  </div>
+
+  <span id="hint">
+    &#25308;&#25543;&#31080;&#40635; &nbsp;&middot;&nbsp;
+    &#28094;&#36655;&#32302;&#25918; &nbsp;&middot;&nbsp;
+    &#31354;&#30333;&#34389;&#24179;&#31227;
+  </span>
+</div>
+
+<div id="graph-wrap">
+  <svg id="graph"></svg>
+</div>
+
+<div id="tooltip"></div>
+
+<!-- D3 v7 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"
+        integrity="sha512-vc58zeoMCCX4DkFiNVZ2S7yRVBKxCOcBRqMjOgs/W3XwnhX3wHFnKMGVwMsLfbGQLUSGI7ygYBDBv9RiHdyLg=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script>
+// ============================================================
+// DATA  — replace nodesData / linksData with your real output
+//         from R's toJSON() when deploying on GitHub Pages.
+//
+// Schema:
+//   nodesData : [{ id, freq, sentiment }, ...]
+//   linksData : [{ source, target, value, sentiment }, ...]
+//
+// sentiment values: "positive" | "neutral" | "negative"
+// ============================================================
+const nodesData = [
+  {"id":"限時動態","freq":4120,"sentiment":"neutral"},
+  {"id":"更新","freq":3890,"sentiment":"negative"},
+  {"id":"功能","freq":3654,"sentiment":"neutral"},
+  {"id":"問題","freq":3401,"sentiment":"negative"},
+  {"id":"介面","freq":3188,"sentiment":"neutral"},
+  {"id":"使用","freq":2976,"sentiment":"neutral"},
+  {"id":"閃退","freq":2834,"sentiment":"negative"},
+  {"id":"帳號","freq":2712,"sentiment":"negative"},
+  {"id":"載入","freq":2598,"sentiment":"negative"},
+  {"id":"推薦","freq":2455,"sentiment":"positive"},
+  {"id":"廣告","freq":2340,"sentiment":"negative"},
+  {"id":"演算法","freq":2218,"sentiment":"negative"},
+  {"id":"通知","freq":2105,"sentiment":"neutral"},
+  {"id":"貼文","freq":1998,"sentiment":"neutral"},
+  {"id":"個人","freq":1889,"sentiment":"neutral"},
+  {"id":"檔案","freq":1801,"sentiment":"neutral"},
+  {"id":"設計","freq":1723,"sentiment":"positive"},
+  {"id":"體驗","freq":1654,"sentiment":"neutral"},
+  {"id":"版本","freq":1582,"sentiment":"neutral"},
+  {"id":"登入","freq":1498,"sentiment":"negative"},
+  {"id":"私訊","freq":1432,"sentiment":"neutral"},
+  {"id":"濾鏡","freq":1376,"sentiment":"positive"},
+  {"id":"停權","freq":1298,"sentiment":"negative"},
+  {"id":"貼圖","freq":1241,"sentiment":"positive"},
+  {"id":"頭貼","freq":1186,"sentiment":"neutral"},
+  {"id":"限動","freq":1134,"sentiment":"neutral"},
+  {"id":"圖層","freq":1089,"sentiment":"neutral"},
+  {"id":"精選","freq":1024,"sentiment":"neutral"},
+  {"id":"動態","freq":978,"sentiment":"neutral"},
+  {"id":"崩潰","freq":934,"sentiment":"negative"},
+  {"id":"卡頓","freq":891,"sentiment":"negative"},
+  {"id":"異常","freq":852,"sentiment":"negative"},
+  {"id":"介面設計","freq":814,"sentiment":"positive"},
+  {"id":"無法","freq":778,"sentiment":"negative"},
+  {"id":"黑屏","freq":741,"sentiment":"negative"},
+  {"id":"網格","freq":708,"sentiment":"neutral"},
+  {"id":"版面","freq":675,"sentiment":"neutral"},
+  {"id":"聊天","freq":644,"sentiment":"neutral"},
+  {"id":"雙重","freq":612,"sentiment":"neutral"},
+  {"id":"驗證","freq":584,"sentiment":"neutral"},
+  {"id":"客服","freq":558,"sentiment":"neutral"},
+  {"id":"回應","freq":533,"sentiment":"neutral"},
+  {"id":"內容","freq":509,"sentiment":"neutral"},
+  {"id":"社群","freq":487,"sentiment":"neutral"},
+  {"id":"分享","freq":466,"sentiment":"positive"},
+  {"id":"好用","freq":445,"sentiment":"positive"},
+  {"id":"方便","freq":425,"sentiment":"positive"},
+  {"id":"順暢","freq":406,"sentiment":"positive"},
+  {"id":"穩定","freq":388,"sentiment":"positive"},
+  {"id":"快速","freq":371,"sentiment":"positive"},
+  {"id":"清晰","freq":354,"sentiment":"positive"},
+  {"id":"美觀","freq":338,"sentiment":"positive"},
+  {"id":"簡潔","freq":323,"sentiment":"positive"},
+  {"id":"流暢","freq":309,"sentiment":"positive"},
+  {"id":"滿意","freq":295,"sentiment":"positive"},
+  {"id":"開心","freq":282,"sentiment":"positive"},
+  {"id":"喜歡","freq":269,"sentiment":"positive"},
+  {"id":"很棒","freq":257,"sentiment":"positive"},
+  {"id":"超棒","freq":246,"sentiment":"positive"},
+  {"id":"不錯","freq":235,"sentiment":"positive"},
+  {"id":"優質","freq":224,"sentiment":"positive"},
+  {"id":"實用","freq":214,"sentiment":"positive"},
+  {"id":"精緻","freq":204,"sentiment":"positive"},
+  {"id":"友善","freq":195,"sentiment":"positive"},
+  {"id":"出色","freq":186,"sentiment":"positive"},
+  {"id":"進步","freq":178,"sentiment":"positive"},
+  {"id":"改善","freq":170,"sentiment":"positive"},
+  {"id":"提升","freq":162,"sentiment":"positive"},
+  {"id":"加分","freq":155,"sentiment":"positive"},
+  {"id":"爛","freq":512,"sentiment":"negative"},
+  {"id":"差","freq":489,"sentiment":"negative"},
+  {"id":"糟","freq":467,"sentiment":"negative"},
+  {"id":"慢","freq":445,"sentiment":"negative"},
+  {"id":"卡","freq":424,"sentiment":"negative"},
+  {"id":"失敗","freq":403,"sentiment":"negative"},
+  {"id":"錯誤","freq":384,"sentiment":"negative"},
+  {"id":"故障","freq":365,"sentiment":"negative"},
+  {"id":"損壞","freq":348,"sentiment":"negative"},
+  {"id":"消失","freq":332,"sentiment":"negative"},
+  {"id":"難用","freq":316,"sentiment":"negative"},
+  {"id":"麻煩","freq":301,"sentiment":"negative"},
+  {"id":"複雜","freq":287,"sentiment":"negative"},
+  {"id":"混亂","freq":273,"sentiment":"negative"},
+  {"id":"延遲","freq":260,"sentiment":"negative"},
+  {"id":"中斷","freq":248,"sentiment":"negative"},
+  {"id":"無語","freq":236,"sentiment":"negative"},
+  {"id":"傻眼","freq":225,"sentiment":"negative"},
+  {"id":"討厭","freq":214,"sentiment":"negative"},
+  {"id":"失望","freq":204,"sentiment":"negative"},
+  {"id":"垃圾","freq":194,"sentiment":"negative"},
+  {"id":"退步","freq":185,"sentiment":"negative"},
+  {"id":"破壞","freq":176,"sentiment":"negative"},
+  {"id":"強制","freq":168,"sentiment":"negative"},
+  {"id":"騷擾","freq":160,"sentiment":"negative"},
+  {"id":"不安","freq":153,"sentiment":"negative"},
+  {"id":"危險","freq":146,"sentiment":"negative"},
+  {"id":"不穩","freq":139,"sentiment":"negative"},
+  {"id":"惡化","freq":133,"sentiment":"negative"}
+];
+
+const linksData = [
+  {"source":"限時動態","target":"功能","value":890,"sentiment":"neutral"},
+  {"source":"限時動態","target":"消失","value":756,"sentiment":"negative"},
+  {"source":"更新","target":"問題","value":1120,"sentiment":"negative"},
+  {"source":"更新","target":"版本","value":834,"sentiment":"neutral"},
+  {"source":"更新","target":"介面","value":712,"sentiment":"neutral"},
+  {"source":"功能","target":"異常","value":678,"sentiment":"negative"},
+  {"source":"功能","target":"好用","value":534,"sentiment":"positive"},
+  {"source":"功能","target":"通知","value":489,"sentiment":"neutral"},
+  {"source":"問題","target":"閃退","value":934,"sentiment":"negative"},
+  {"source":"問題","target":"更新","value":823,"sentiment":"negative"},
+  {"source":"問題","target":"帳號","value":701,"sentiment":"negative"},
+  {"source":"介面","target":"設計","value":612,"sentiment":"positive"},
+  {"source":"介面","target":"更新","value":589,"sentiment":"neutral"},
+  {"source":"使用","target":"體驗","value":567,"sentiment":"neutral"},
+  {"source":"使用","target":"功能","value":512,"sentiment":"neutral"},
+  {"source":"閃退","target":"問題","value":845,"sentiment":"negative"},
+  {"source":"閃退","target":"崩潰","value":723,"sentiment":"negative"},
+  {"source":"閃退","target":"更新","value":634,"sentiment":"negative"},
+  {"source":"帳號","target":"停權","value":589,"sentiment":"negative"},
+  {"source":"帳號","target":"登入","value":534,"sentiment":"negative"},
+  {"source":"載入","target":"緩慢","value":467,"sentiment":"negative"},
+  {"source":"載入","target":"卡頓","value":412,"sentiment":"negative"},
+  {"source":"推薦","target":"演算法","value":723,"sentiment":"negative"},
+  {"source":"推薦","target":"內容","value":534,"sentiment":"neutral"},
+  {"source":"廣告","target":"太多","value":689,"sentiment":"negative"},
+  {"source":"廣告","target":"騷擾","value":423,"sentiment":"negative"},
+  {"source":"演算法","target":"推薦","value":612,"sentiment":"neutral"},
+  {"source":"通知","target":"功能","value":398,"sentiment":"neutral"},
+  {"source":"貼文","target":"分享","value":456,"sentiment":"positive"},
+  {"source":"貼文","target":"功能","value":389,"sentiment":"neutral"},
+  {"source":"個人","target":"檔案","value":734,"sentiment":"neutral"},
+  {"source":"個人","target":"頭貼","value":456,"sentiment":"neutral"},
+  {"source":"設計","target":"介面","value":589,"sentiment":"positive"},
+  {"source":"設計","target":"美觀","value":423,"sentiment":"positive"},
+  {"source":"版本","target":"更新","value":678,"sentiment":"neutral"},
+  {"source":"登入","target":"帳號","value":512,"sentiment":"negative"},
+  {"source":"登入","target":"無法","value":445,"sentiment":"negative"},
+  {"source":"私訊","target":"功能","value":378,"sentiment":"neutral"},
+  {"source":"私訊","target":"聊天","value":334,"sentiment":"neutral"},
+  {"source":"濾鏡","target":"效果","value":389,"sentiment":"positive"},
+  {"source":"濾鏡","target":"功能","value":312,"sentiment":"positive"},
+  {"source":"停權","target":"帳號","value":467,"sentiment":"negative"},
+  {"source":"貼圖","target":"功能","value":289,"sentiment":"positive"},
+  {"source":"頭貼","target":"個人","value":378,"sentiment":"neutral"},
+  {"source":"限動","target":"限時動態","value":534,"sentiment":"neutral"},
+  {"source":"圖層","target":"功能","value":267,"sentiment":"neutral"},
+  {"source":"精選","target":"動態","value":456,"sentiment":"neutral"},
+  {"source":"精選","target":"功能","value":334,"sentiment":"neutral"},
+  {"source":"動態","target":"消失","value":512,"sentiment":"negative"},
+  {"source":"動態","target":"限時動態","value":445,"sentiment":"neutral"},
+  {"source":"崩潰","target":"閃退","value":634,"sentiment":"negative"},
+  {"source":"崩潰","target":"更新","value":489,"sentiment":"negative"},
+  {"source":"卡頓","target":"問題","value":412,"sentiment":"negative"},
+  {"source":"卡頓","target":"載入","value":367,"sentiment":"negative"},
+  {"source":"異常","target":"功能","value":489,"sentiment":"negative"},
+  {"source":"異常","target":"問題","value":423,"sentiment":"negative"},
+  {"source":"無法","target":"登入","value":389,"sentiment":"negative"},
+  {"source":"無法","target":"功能","value":334,"sentiment":"negative"},
+  {"source":"黑屏","target":"閃退","value":456,"sentiment":"negative"},
+  {"source":"黑屏","target":"問題","value":378,"sentiment":"negative"},
+  {"source":"網格","target":"版面","value":423,"sentiment":"neutral"},
+  {"source":"版面","target":"介面","value":367,"sentiment":"neutral"},
+  {"source":"聊天","target":"功能","value":334,"sentiment":"neutral"},
+  {"source":"聊天","target":"私訊","value":289,"sentiment":"neutral"},
+  {"source":"雙重","target":"驗證","value":512,"sentiment":"neutral"},
+  {"source":"驗證","target":"帳號","value":445,"sentiment":"neutral"},
+  {"source":"客服","target":"回應","value":378,"sentiment":"neutral"},
+  {"source":"回應","target":"客服","value":312,"sentiment":"neutral"},
+  {"source":"內容","target":"推薦","value":445,"sentiment":"neutral"},
+  {"source":"社群","target":"功能","value":367,"sentiment":"neutral"},
+  {"source":"分享","target":"貼文","value":389,"sentiment":"positive"},
+  {"source":"好用","target":"功能","value":412,"sentiment":"positive"},
+  {"source":"方便","target":"使用","value":356,"sentiment":"positive"},
+  {"source":"順暢","target":"使用","value":334,"sentiment":"positive"},
+  {"source":"穩定","target":"版本","value":312,"sentiment":"positive"},
+  {"source":"快速","target":"載入","value":289,"sentiment":"positive"},
+  {"source":"清晰","target":"介面","value":267,"sentiment":"positive"},
+  {"source":"美觀","target":"設計","value":312,"sentiment":"positive"},
+  {"source":"簡潔","target":"介面","value":289,"sentiment":"positive"},
+  {"source":"流暢","target":"使用","value":267,"sentiment":"positive"},
+  {"source":"滿意","target":"使用","value":245,"sentiment":"positive"},
+  {"source":"開心","target":"使用","value":224,"sentiment":"positive"},
+  {"source":"喜歡","target":"功能","value":234,"sentiment":"positive"},
+  {"source":"很棒","target":"功能","value":212,"sentiment":"positive"},
+  {"source":"超棒","target":"使用","value":198,"sentiment":"positive"},
+  {"source":"不錯","target":"體驗","value":189,"sentiment":"positive"},
+  {"source":"優質","target":"內容","value":178,"sentiment":"positive"},
+  {"source":"實用","target":"功能","value":167,"sentiment":"positive"},
+  {"source":"精緻","target":"設計","value":156,"sentiment":"positive"},
+  {"source":"友善","target":"介面","value":145,"sentiment":"positive"},
+  {"source":"出色","target":"功能","value":134,"sentiment":"positive"},
+  {"source":"進步","target":"更新","value":156,"sentiment":"positive"},
+  {"source":"改善","target":"問題","value":145,"sentiment":"positive"},
+  {"source":"提升","target":"體驗","value":134,"sentiment":"positive"},
+  {"source":"加分","target":"設計","value":123,"sentiment":"positive"},
+  {"source":"爛","target":"更新","value":467,"sentiment":"negative"},
+  {"source":"爛","target":"功能","value":412,"sentiment":"negative"},
+  {"source":"差","target":"體驗","value":389,"sentiment":"negative"},
+  {"source":"差","target":"功能","value":356,"sentiment":"negative"},
+  {"source":"糟","target":"更新","value":334,"sentiment":"negative"},
+  {"source":"慢","target":"載入","value":389,"sentiment":"negative"},
+  {"source":"卡","target":"功能","value":356,"sentiment":"negative"},
+  {"source":"卡","target":"載入","value":312,"sentiment":"negative"},
+  {"source":"失敗","target":"更新","value":289,"sentiment":"negative"},
+  {"source":"錯誤","target":"更新","value":267,"sentiment":"negative"},
+  {"source":"故障","target":"功能","value":245,"sentiment":"negative"},
+  {"source":"損壞","target":"更新","value":223,"sentiment":"negative"},
+  {"source":"消失","target":"動態","value":445,"sentiment":"negative"},
+  {"source":"消失","target":"限時動態","value":389,"sentiment":"negative"},
+  {"source":"難用","target":"介面","value":267,"sentiment":"negative"},
+  {"source":"麻煩","target":"使用","value":245,"sentiment":"negative"},
+  {"source":"複雜","target":"介面","value":223,"sentiment":"negative"},
+  {"source":"混亂","target":"介面","value":212,"sentiment":"negative"},
+  {"source":"延遲","target":"載入","value":289,"sentiment":"negative"},
+  {"source":"中斷","target":"功能","value":245,"sentiment":"negative"},
+  {"source":"無語","target":"更新","value":356,"sentiment":"negative"},
+  {"source":"傻眼","target":"更新","value":312,"sentiment":"negative"},
+  {"source":"討厭","target":"廣告","value":289,"sentiment":"negative"},
+  {"source":"失望","target":"更新","value":267,"sentiment":"negative"},
+  {"source":"垃圾","target":"更新","value":245,"sentiment":"negative"},
+  {"source":"退步","target":"更新","value":223,"sentiment":"negative"},
+  {"source":"破壞","target":"功能","value":201,"sentiment":"negative"},
+  {"source":"強制","target":"更新","value":189,"sentiment":"negative"},
+  {"source":"騷擾","target":"廣告","value":312,"sentiment":"negative"},
+  {"source":"不安","target":"帳號","value":178,"sentiment":"negative"},
+  {"source":"危險","target":"帳號","value":167,"sentiment":"negative"},
+  {"source":"不穩","target":"功能","value":156,"sentiment":"negative"},
+  {"source":"惡化","target":"更新","value":145,"sentiment":"negative"}
+];
+
+// ============================================================
+// COLOUR SYSTEM
+// 3 sentiment families × 4 frequency tiers (dark → light)
+// ============================================================
+const COLORS = {
+  positive: ["#7d2e00", "#d85a30", "#f0997b", "#f8cfc2"],
+  neutral:  ["#1f1876", "#4a3fbb", "#7b73d8", "#b5b0ee"],
+  negative: ["#053d2e", "#0f6e56", "#1d9e75", "#6dcfb0"]
+};
+const EDGE_COLORS  = { positive:"#f0997b", neutral:"#7b73d8", negative:"#1d9e75" };
+const HOVER_STROKE = { positive:"#7d2e00", neutral:"#1f1876", negative:"#053d2e" };
+
+function nodeColor(d) {
+  const t = d.freq / maxFreq;
+  const r = COLORS[d.sentiment] || COLORS.neutral;
+  if      (t > 0.60) return r[0];
+  else if (t > 0.30) return r[1];
+  else if (t > 0.10) return r[2];
+  else               return r[3];
+}
+
+// ============================================================
+// SCALES
+// ============================================================
+const maxFreq = d3.max(nodesData, d => d.freq);
+const maxVal  = d3.max(linksData, d => d.value);
+const rScale  = d3.scaleSqrt().domain([0, maxFreq]).range([5, 24]);
+const wScale  = d3.scaleLinear().domain([0, maxVal]).range([0.5, 5]);
+
+// ============================================================
+// SVG + ZOOM
+// ============================================================
+const wrap = document.getElementById("graph-wrap");
+const svg  = d3.select("#graph");
+const g    = svg.append("g");
+
+const zoom = d3.zoom()
+  .scaleExtent([0.04, 10])
+  .on("zoom", e => g.attr("transform", e.transform));
+svg.call(zoom);
+
+let sim, linkSel, nodeSel;
+const W = () => wrap.clientWidth;
+const H = () => wrap.clientHeight;
+
+// ============================================================
+// HOVER HIGHLIGHT
+// ============================================================
+function highlight(hovId) {
+  const nb = new Set([hovId]);
+  linksData.forEach(l => {
+    const s = typeof l.source === "object" ? l.source.id : l.source;
+    const t = typeof l.target === "object" ? l.target.id : l.target;
+    if (s === hovId) nb.add(t);
+    if (t === hovId) nb.add(s);
+  });
+
+  nodeSel.select("circle")
+    .attr("fill-opacity", d => nb.has(d.id) ? 0.95 : 0.08)
+    .attr("stroke",       d => d.id === hovId
+                                 ? (HOVER_STROKE[d.sentiment] || "#1f1876")
+                                 : "#fff")
+    .attr("stroke-width", d => d.id === hovId ? 3 : 1.5);
+
+  nodeSel.select("text")
+    .attr("fill-opacity", d => nb.has(d.id) ? 1 : 0.10);
+
+  linkSel
+    .attr("stroke", d => {
+      const s = typeof d.source === "object" ? d.source.id : d.source;
+      const t = typeof d.target === "object" ? d.target.id : d.target;
+      return (s === hovId || t === hovId)
+        ? (EDGE_COLORS[d.sentiment] || EDGE_COLORS.neutral)
+        : "#ccc";
+    })
+    .attr("stroke-opacity", d => {
+      const s = typeof d.source === "object" ? d.source.id : d.source;
+      const t = typeof d.target === "object" ? d.target.id : d.target;
+      return (s === hovId || t === hovId) ? 0.92 : 0.05;
+    })
+    .attr("stroke-width", d => {
+      const s = typeof d.source === "object" ? d.source.id : d.source;
+      const t = typeof d.target === "object" ? d.target.id : d.target;
+      return (s === hovId || t === hovId) ? wScale(d.value) * 2 : wScale(d.value);
+    });
+}
+
+function resetHighlight() {
+  nodeSel.select("circle")
+    .attr("fill-opacity", 0.88)
+    .attr("stroke",       "#fff")
+    .attr("stroke-width", 1.5);
+  nodeSel.select("text").attr("fill-opacity", 1);
+  linkSel
+    .attr("stroke",         d => EDGE_COLORS[d.sentiment] || EDGE_COLORS.neutral)
+    .attr("stroke-opacity", 0.35)
+    .attr("stroke-width",   d => wScale(d.value));
+}
+
+// ============================================================
+// BUILD GRAPH
+// ============================================================
+function buildGraph(charge, dist) {
+  if (sim) sim.stop();
+  g.selectAll("*").remove();
+
+  const nodes = nodesData.map(d => Object.assign({}, d));
+  const links = linksData.map(d => Object.assign({}, d));
+
+  // Edges
+  linkSel = g.append("g")
+    .attr("class", "links")
+    .selectAll("line")
+    .data(links).join("line")
+    .attr("stroke",         d => EDGE_COLORS[d.sentiment] || EDGE_COLORS.neutral)
+    .attr("stroke-opacity", 0.35)
+    .attr("stroke-width",   d => wScale(d.value))
+    .attr("stroke-linecap", "round");
+
+  // Nodes
+  nodeSel = g.append("g")
+    .attr("class", "nodes")
+    .selectAll("g.node")
+    .data(nodes).join("g")
+    .attr("class", "node")
+    .style("cursor", "grab")
+    .call(d3.drag()
+      .on("start", (e, d) => {
+        if (!e.active) sim.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+        e.sourceEvent.currentTarget.style.cursor = "grabbing";
+      })
+      .on("drag",  (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on("end",   (e, d) => {
+        if (!e.active) sim.alphaTarget(0);
+        d.fx = null; d.fy = null;
+        e.sourceEvent.currentTarget.style.cursor = "grab";
+      })
     )
-  )
+    .on("mouseover", (e, d) => {
+      const tip = document.getElementById("tooltip");
+      const cnt = linksData.filter(l => {
+        const s = typeof l.source === "object" ? l.source.id : l.source;
+        const t = typeof l.target === "object" ? l.target.id : l.target;
+        return s === d.id || t === d.id;
+      }).length;
+      const sentMap = { positive:"\u6b63\u9762", neutral:"\u4e2d\u6027", negative:"\u8ca0\u9762" };
+      const colMap  = { positive:"#d85a30", neutral:"#4a3fbb", negative:"#0f6e56" };
+      const sLabel  = sentMap[d.sentiment]  || "\u4e2d\u6027";
+      const sCol    = colMap[d.sentiment]   || "#4a3fbb";
+      tip.innerHTML =
+        "<b>" + d.id + "</b>" +
+        "&nbsp;<span style='background:" + sCol + ";color:#fff;font-size:10px;" +
+        "padding:1px 7px;border-radius:4px;font-weight:600'>" + sLabel + "</span>" +
+        "<br>\u5171\u73fe\u983b\u7387\uff1a<b>" + d.freq.toLocaleString() + "</b>" +
+        "<br>\u9023\u63a5\u8a5e\u6578\uff1a" + cnt;
+      tip.style.opacity = 1;
+      tip.style.left = (e.clientX + 15) + "px";
+      tip.style.top  = (e.clientY - 48) + "px";
+      highlight(d.id);
+    })
+    .on("mousemove", e => {
+      const tip = document.getElementById("tooltip");
+      tip.style.left = (e.clientX + 15) + "px";
+      tip.style.top  = (e.clientY - 48) + "px";
+    })
+    .on("mouseout", () => {
+      document.getElementById("tooltip").style.opacity = 0;
+      resetHighlight();
+    });
 
-# =============================================================================
-# 步驟 3 — 節點頻率與情感（多數決）
-# =============================================================================
-node_sentiment_raw <- bind_rows(
-  top_bigrams %>% select(word = word1, sentiment, n),
-  top_bigrams %>% select(word = word2, sentiment, n)
-) %>%
-  group_by(word, sentiment) %>%
-  summarise(sent_n = sum(n), .groups = "drop") %>%
-  group_by(word) %>%
-  slice_max(sent_n, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  select(word, node_sentiment = sentiment)
+  nodeSel.append("circle")
+    .attr("r",            d => rScale(d.freq))
+    .attr("fill",         d => nodeColor(d))
+    .attr("fill-opacity", 0.88)
+    .attr("stroke",       "#fff")
+    .attr("stroke-width", 1.5);
 
-node_freq <- bind_rows(
-  top_bigrams %>% select(word = word1, n),
-  top_bigrams %>% select(word = word2, n)
-) %>%
-  group_by(word) %>%
-  summarise(freq = sum(n), .groups = "drop") %>%
-  arrange(desc(freq)) %>%
-  left_join(node_sentiment_raw, by = "word") %>%
-  mutate(node_sentiment = ifelse(is.na(node_sentiment), "neutral", node_sentiment))
+  nodeSel.append("text")
+    .text(d => d.id)
+    .attr("text-anchor",       "middle")
+    .attr("dominant-baseline", "central")
+    .attr("fill",              "#fff")
+    .attr("fill-opacity",      1)
+    .attr("font-size",         d => Math.max(8, Math.min(13, rScale(d.freq) * 0.62)) + "px")
+    .attr("font-weight",       "700")
+    .attr("pointer-events",    "none");
 
-# =============================================================================
-# 步驟 4 — JSON 序列化
-# =============================================================================
-nodes_json <- as.character(toJSON(
-  data.frame(id        = node_freq$word,
-             freq      = node_freq$freq,
-             sentiment = node_freq$node_sentiment),
-  auto_unbox = TRUE
-))
+  sim = d3.forceSimulation(nodes)
+    .force("link",      d3.forceLink(links).id(d => d.id).distance(dist).strength(0.5))
+    .force("charge",    d3.forceManyBody().strength(charge).distanceMax(480))
+    .force("center",    d3.forceCenter(W() / 2, H() / 2))
+    .force("collision", d3.forceCollide(d => rScale(d.freq) + 7))
+    .on("tick", () => {
+      linkSel
+        .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+      nodeSel.attr("transform", d => "translate(" + d.x + "," + d.y + ")");
+    });
+}
 
-links_json <- as.character(toJSON(
-  data.frame(source    = top_bigrams$word1,
-             target    = top_bigrams$word2,
-             value     = top_bigrams$n,
-             sentiment = top_bigrams$sentiment),
-  auto_unbox = TRUE
-))
+// ============================================================
+// CONTROLS
+// ============================================================
+function resetLayout() {
+  buildGraph(
+    +document.getElementById("repulsion").value,
+    +document.getElementById("linklen").value
+  );
+  svg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+}
 
-# =============================================================================
-# 步驟 5 — 組合 HTML
-# =============================================================================
-title_text <- paste0("Instagram \u8a55\u8ad6 Bigram \u60c5\u611f\u7db2\u8def\u5716\uff08Top ", TOP_N, "\uff09")
+document.getElementById("repulsion").addEventListener("input", function () {
+  document.getElementById("rep-val").textContent = Math.abs(this.value);
+  sim.force("charge", d3.forceManyBody().strength(+this.value).distanceMax(480));
+  sim.alpha(0.4).restart();
+});
 
-p <- function(...) paste0(...)
+document.getElementById("linklen").addEventListener("input", function () {
+  document.getElementById("len-val").textContent = this.value;
+  sim.force("link").distance(+this.value);
+  sim.alpha(0.4).restart();
+});
 
-html_css <- p(
-'* { box-sizing: border-box; margin: 0; padding: 0; }',
-'body {',
-'  font-family: "Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;',
-'  background: #ffffff; color: #2c2c2a;',
-'  height: 100vh; display: flex; flex-direction: column;',
-'}',
-'#header {',
-'  padding: 10px 18px 9px; border-bottom: 1px solid #eaeaea;',
-'  background: #ffffff; display: flex; flex-wrap: wrap; align-items: center; gap: 12px;',
-'}',
-'#header h1 { font-size: 14px; font-weight: 600; color: #26215c; white-space: nowrap; }',
-'.ctrl-group { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #5f5e5a; }',
-'.ctrl-group label { white-space: nowrap; }',
-'input[type=range] {',
-'  -webkit-appearance: none; appearance: none;',
-'  width: 88px; height: 3px; border-radius: 2px;',
-'  background: #cecbf6; outline: none; cursor: pointer;',
-'}',
-'input[type=range]::-webkit-slider-thumb {',
-'  -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;',
-'  background: #534ab7; cursor: pointer; border: 2px solid #fff;',
-'  box-shadow: 0 0 0 1px #534ab7;',
-'}',
-'.val-badge {',
-'  min-width: 30px; text-align: right; font-variant-numeric: tabular-nums;',
-'  font-weight: 600; color: #534ab7; font-size: 12px;',
-'}',
-'#reset-btn {',
-'  padding: 4px 10px; border: 1px solid #afa9ec; border-radius: 6px;',
-'  background: transparent; color: #534ab7; font-size: 12px;',
-'  cursor: pointer; font-family: inherit; transition: background .15s;',
-'}',
-'#reset-btn:hover { background: #eeedfe; }',
-'#legend { display: flex; align-items: center; gap: 10px; margin-left: auto; font-size: 11px; color: #5f5e5a; }',
-'.leg-item { display: flex; align-items: center; gap: 4px; }',
-'.leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }',
-'#hint { font-size: 10px; color: #b4b2a9; white-space: nowrap; }',
-'#graph-wrap { flex: 1; overflow: hidden; position: relative; background: #ffffff; }',
-'svg { display: block; width: 100%; height: 100%; }',
-'#tooltip {',
-'  position: fixed; background: #fff; border: 1px solid #eaeaea;',
-'  border-radius: 8px; padding: 7px 12px; font-size: 12px;',
-'  pointer-events: none; opacity: 0; transition: opacity .12s;',
-'  color: #26215c; box-shadow: 0 2px 10px rgba(0,0,0,.08);',
-'  max-width: 210px; line-height: 1.7; z-index: 9999;',
-'}'
-)
+window.resetLayout = resetLayout;
 
-html_structure <- p(
-'<!DOCTYPE html>',
-'<html lang="zh-Hant">',
-'<head>',
-'<meta charset="UTF-8">',
-'<meta name="viewport" content="width=device-width, initial-scale=1.0">',
-'<title>', title_text, '</title>',
-'<style>', html_css, '</style>',
-'</head>',
-'<body>',
-'<div id="header">',
-'  <h1>', title_text, '</h1>',
-'  <div class="ctrl-group">',
-'    <label for="repulsion">&#x27F2; \u659c\u529b</label>',
-'    <input type="range" id="repulsion" min="-1200" max="-30" value="-320" step="10">',
-'    <span class="val-badge" id="rep-val">320</span>',
-'  </div>',
-'  <div class="ctrl-group">',
-'    <label for="linklen">&#x21D4; \u9023\u7d50</label>',
-'    <input type="range" id="linklen" min="30" max="280" value="85" step="5">',
-'    <span class="val-badge" id="len-val">85</span>',
-'  </div>',
-'  <button id="reset-btn" onclick="resetLayout()">&#x21BA; \u91cd\u7f6e</button>',
-'  <div id="legend">',
-'    <div class="leg-item"><div class="leg-dot" style="background:#d85a30"></div>\u6b63\u9762</div>',
-'    <div class="leg-item"><div class="leg-dot" style="background:#534ab7"></div>\u4e2d\u6027</div>',
-'    <div class="leg-item"><div class="leg-dot" style="background:#0f6e56"></div>\u8ca0\u9762</div>',
-'  </div>',
-'  <span id="hint">\u62d6\u62fd\u7bc0\u9ede &middot; \u6eda\u8f2a\u7e2e\u653e &middot; \u7a7a\u767d\u8655\u5e73\u79fb</span>',
-'</div>',
-'<div id="graph-wrap"><svg id="graph"></svg></div>',
-'<div id="tooltip"></div>',
-'<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>',
-'<script>'
-)
-
-js_data <- p(
-'const nodesData = ', nodes_json, ';',
-'const linksData = ', links_json, ';'
-)
-
-js_colors <- p(
-'const COLORS = {',
-'  positive: ["#993c1d","#d85a30","#f0997b","#f5c4b3"],',
-'  neutral:  ["#26215c","#534ab7","#7f77dd","#afa9ec"],',
-'  negative: ["#085041","#0f6e56","#1d9e75","#5dcaa5"]',
-'};',
-'const EDGE_COLORS = { positive:"#d85a30", neutral:"#7f77dd", negative:"#1d9e75" };',
-'const HOVER_STROKE = { positive:"#993c1d", neutral:"#26215c", negative:"#085041" };'
-)
-
-js_scales <- p(
-'const maxFreq = d3.max(nodesData, d => d.freq);',
-'const maxVal  = d3.max(linksData, d => d.value);',
-'const rScale  = d3.scaleSqrt().domain([0, maxFreq]).range([5, 22]);',
-'const wScale  = d3.scaleLinear().domain([0, maxVal]).range([0.6, 5]);',
-'function nodeColor(d) {',
-'  const t = d.freq / maxFreq;',
-'  const ramp = COLORS[d.sentiment] || COLORS.neutral;',
-'  if      (t > 0.60) return ramp[0];',
-'  else if (t > 0.30) return ramp[1];',
-'  else if (t > 0.12) return ramp[2];',
-'  else               return ramp[3];',
-'}'
-)
-
-js_setup <- p(
-'const wrap = document.getElementById("graph-wrap");',
-'const svg  = d3.select("#graph");',
-'const g    = svg.append("g");',
-'const zoom = d3.zoom()',
-'  .scaleExtent([0.05, 8])',
-'  .on("zoom", e => g.attr("transform", e.transform));',
-'svg.call(zoom);',
-'let sim, linkSel, nodeSel;',
-'function W() { return wrap.clientWidth; }',
-'function H() { return wrap.clientHeight; }'
-)
-
-js_highlight <- p(
-'function highlight(hovId) {',
-'  const nb = new Set([hovId]);',
-'  linksData.forEach(l => {',
-'    const s = typeof l.source === "object" ? l.source.id : l.source;',
-'    const t = typeof l.target === "object" ? l.target.id : l.target;',
-'    if (s === hovId) nb.add(t);',
-'    if (t === hovId) nb.add(s);',
-'  });',
-'  nodeSel.select("circle")',
-'    .attr("fill-opacity", d => nb.has(d.id) ? 0.93 : 0.10)',
-'    .attr("stroke",       d => d.id === hovId ? (HOVER_STROKE[d.sentiment] || "#26215c") : "#fff")',
-'    .attr("stroke-width", d => d.id === hovId ? 2.8 : 1.5);',
-'  nodeSel.select("text").attr("fill-opacity", d => nb.has(d.id) ? 1 : 0.12);',
-'  linkSel',
-'    .attr("stroke", d => {',
-'      const s = typeof d.source === "object" ? d.source.id : d.source;',
-'      const t = typeof d.target === "object" ? d.target.id : d.target;',
-'      return (s === hovId || t === hovId) ? (EDGE_COLORS[d.sentiment] || EDGE_COLORS.neutral) : "#c8c6d0";',
-'    })',
-'    .attr("stroke-opacity", d => {',
-'      const s = typeof d.source === "object" ? d.source.id : d.source;',
-'      const t = typeof d.target === "object" ? d.target.id : d.target;',
-'      return (s === hovId || t === hovId) ? 0.92 : 0.06;',
-'    })',
-'    .attr("stroke-width", d => {',
-'      const s = typeof d.source === "object" ? d.source.id : d.source;',
-'      const t = typeof d.target === "object" ? d.target.id : d.target;',
-'      return (s === hovId || t === hovId) ? wScale(d.value) * 1.8 : wScale(d.value);',
-'    });',
-'}',
-'function resetHighlight() {',
-'  nodeSel.select("circle").attr("fill-opacity", 0.86).attr("stroke", "#fff").attr("stroke-width", 1.5);',
-'  nodeSel.select("text").attr("fill-opacity", 1);',
-'  linkSel',
-'    .attr("stroke",         d => EDGE_COLORS[d.sentiment] || EDGE_COLORS.neutral)',
-'    .attr("stroke-opacity", 0.38)',
-'    .attr("stroke-width",   d => wScale(d.value));',
-'}'
-)
-
-js_build <- p(
-'function buildGraph(charge, dist) {',
-'  if (sim) sim.stop();',
-'  g.selectAll("*").remove();',
-'  const nodes = nodesData.map(d => Object.assign({}, d));',
-'  const links = linksData.map(d => Object.assign({}, d));',
-'  linkSel = g.append("g").selectAll("line")',
-'    .data(links).join("line")',
-'    .attr("stroke",         d => EDGE_COLORS[d.sentiment] || EDGE_COLORS.neutral)',
-'    .attr("stroke-opacity", 0.38)',
-'    .attr("stroke-width",   d => wScale(d.value));',
-'  nodeSel = g.append("g").selectAll("g.node")',
-'    .data(nodes).join("g")',
-'    .attr("class", "node")',
-'    .style("cursor", "grab")',
-'    .call(d3.drag()',
-'      .on("start", (e, d) => {',
-'        if (!e.active) sim.alphaTarget(0.3).restart();',
-'        d.fx = d.x; d.fy = d.y;',
-'        e.sourceEvent.currentTarget.style.cursor = "grabbing";',
-'      })',
-'      .on("drag",  (e, d) => { d.fx = e.x; d.fy = e.y; })',
-'      .on("end",   (e, d) => {',
-'        if (!e.active) sim.alphaTarget(0);',
-'        d.fx = null; d.fy = null;',
-'        e.sourceEvent.currentTarget.style.cursor = "grab";',
-'      })',
-'    )',
-'    .on("mouseover", (e, d) => {',
-'      const tip = document.getElementById("tooltip");',
-'      const cnt = linksData.filter(l => {',
-'        const s = typeof l.source === "object" ? l.source.id : l.source;',
-'        const t = typeof l.target === "object" ? l.target.id : l.target;',
-'        return s === d.id || t === d.id;',
-'      }).length;',
-'      const sLabel = d.sentiment === "positive" ? "\u6b63\u9762" : d.sentiment === "negative" ? "\u8ca0\u9762" : "\u4e2d\u6027";',
-'      const sCol   = d.sentiment === "positive" ? "#d85a30"     : d.sentiment === "negative" ? "#0f6e56"     : "#534ab7";',
-'      tip.innerHTML =',
-'        "<b>" + d.id + "</b> " +',
-'        "<span style=\\"background:" + sCol + ";color:#fff;font-size:10px;padding:1px 6px;border-radius:4px\\">" + sLabel + "</span>" +',
-'        "<br>\u5171\u73fe\u983b\u7387\uff1a" + d.freq +',
-'        "<br>\u9023\u63a5\u8a5e\u6578\uff1a" + cnt;',
-'      tip.style.opacity = 1;',
-'      tip.style.left = (e.clientX + 14) + "px";',
-'      tip.style.top  = (e.clientY - 44) + "px";',
-'      highlight(d.id);',
-'    })',
-'    .on("mousemove", e => {',
-'      const tip = document.getElementById("tooltip");',
-'      tip.style.left = (e.clientX + 14) + "px";',
-'      tip.style.top  = (e.clientY - 44) + "px";',
-'    })',
-'    .on("mouseout", () => {',
-'      document.getElementById("tooltip").style.opacity = 0;',
-'      resetHighlight();',
-'    });',
-'  nodeSel.append("circle")',
-'    .attr("r",            d => rScale(d.freq))',
-'    .attr("fill",         d => nodeColor(d))',
-'    .attr("fill-opacity", 0.86)',
-'    .attr("stroke",       "#fff")',
-'    .attr("stroke-width", 1.5);',
-'  nodeSel.append("text")',
-'    .text(d => d.id)',
-'    .attr("text-anchor",       "middle")',
-'    .attr("dominant-baseline", "central")',
-'    .attr("fill",              "#fff")',
-'    .attr("fill-opacity",      1)',
-'    .attr("font-size",         d => Math.max(8, Math.min(13, rScale(d.freq) * 0.65)) + "px")',
-'    .attr("font-weight",       "600")',
-'    .attr("pointer-events",    "none");',
-'  sim = d3.forceSimulation(nodes)',
-'    .force("link",      d3.forceLink(links).id(d => d.id).distance(dist).strength(0.5))',
-'    .force("charge",    d3.forceManyBody().strength(charge).distanceMax(430))',
-'    .force("center",    d3.forceCenter(W() / 2, H() / 2))',
-'    .force("collision", d3.forceCollide(d => rScale(d.freq) + 6))',
-'    .on("tick", () => {',
-'      linkSel',
-'        .attr("x1", d => d.source.x).attr("y1", d => d.source.y)',
-'        .attr("x2", d => d.target.x).attr("y2", d => d.target.y);',
-'      nodeSel.attr("transform", d => "translate(" + d.x + "," + d.y + ")");',
-'    });',
-'}'
-)
-
-js_controls <- p(
-'function resetLayout() {',
-'  buildGraph(',
-'    +document.getElementById("repulsion").value,',
-'    +document.getElementById("linklen").value',
-'  );',
-'  svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity);',
-'}',
-'document.getElementById("repulsion").addEventListener("input", function() {',
-'  document.getElementById("rep-val").textContent = Math.abs(this.value);',
-'  sim.force("charge", d3.forceManyBody().strength(+this.value).distanceMax(430));',
-'  sim.alpha(0.4).restart();',
-'});',
-'document.getElementById("linklen").addEventListener("input", function() {',
-'  document.getElementById("len-val").textContent = this.value;',
-'  sim.force("link").distance(+this.value);',
-'  sim.alpha(0.4).restart();',
-'});',
-'buildGraph(-320, 85);',
-'window.resetLayout = resetLayout;'
-)
-
-html_close <- p('</script>', '</body>', '</html>')
-
-# ── 最終拼合 ──────────────────────────────────────────────────────────────────
-full_html <- p(
-  html_structure, "\n",
-  js_data,        "\n",
-  js_colors,      "\n",
-  js_scales,      "\n",
-  js_setup,       "\n",
-  js_highlight,   "\n",
-  js_build,       "\n",
-  js_controls,    "\n",
-  html_close
-)
-
-# =============================================================================
-# 步驟 6 — 寫出 HTML
-# =============================================================================
-con <- file(OUTPUT_PATH, open = "w", encoding = "UTF-8")
-writeLines(full_html, con = con, useBytes = FALSE)
-close(con)
-git add index.html
-git commit -m "Add interactive D3.js bigram network"
-git push origin main
+// ── Initial render ────────────────────────────────────────────
+buildGraph(-320, 90);
+</script>
+</body>
+</html>
+HTMLEOF
+echo "exit:$? lines:$(wc -l < /mnt/user-data/outputs/index.html)"
