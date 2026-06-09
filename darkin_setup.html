@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Darkîn - 6x4 Board Setup Explainer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Montserrat:wght@300;400;600;700&display=swap');
+        
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: #0c0d10;
+            background-image: radial-gradient(circle at 50% 50%, #161820 0%, #0c0d10 100%);
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+
+        .font-cinzel {
+            font-family: 'Cinzel', serif;
+        }
+
+        /* Hexagon Clip Path */
+        .hex-clip {
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+        }
+
+        /* Game Board Container - optimized for landscape 6x4 layout */
+        .board-container {
+            position: relative;
+            width: 100%;
+            max-width: 620px;
+            aspect-ratio: 1.35 / 1;
+            margin: 0 auto;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 20px;
+        }
+
+        .hex-grid {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .hex-tile {
+            position: absolute;
+            width: 15%;
+            height: 18%;
+            transition: all 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+            cursor: pointer;
+        }
+
+        /* Stacked deck location for dealing animation */
+        .hex-tile.in-deck {
+            left: 50% !important;
+            top: 110% !important;
+            transform: translate(-50%, -50%) scale(0.1) rotate(60deg);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .hex-tile.revealed {
+            opacity: 1;
+        }
+
+        /* Hover glows */
+        .hex-tile.blue-territory:hover {
+            filter: drop-shadow(0 0 15px rgba(59, 130, 246, 0.85));
+        }
+
+        .hex-tile.red-territory:hover {
+            filter: drop-shadow(0 0 15px rgba(239, 68, 68, 0.85));
+        }
+
+        .hex-tile.middle-territory:hover {
+            filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.35));
+        }
+
+        .tile-tooltip {
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+    <!-- Header -->
+    <header class="w-full py-5 px-4 border-b border-white/5 bg-black/40 backdrop-blur-md z-10">
+        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="text-center sm:text-left">
+                <span class="text-xs uppercase tracking-[0.3em] text-amber-500 font-semibold font-cinzel">Tabletop Guide</span>
+                <h1 class="text-2xl font-bold tracking-wider font-cinzel text-white">DARKÎN</h1>
+            </div>
+            <div class="flex items-center gap-2 bg-white/5 px-4 py-1.5 rounded-full border border-white/10 text-xs">
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                6x4 Grid Setup Simulator
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-6xl w-full mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        
+        <!-- Left Side: Control Panel -->
+        <div class="lg:col-span-5 bg-white/5 border border-white/10 rounded-2xl p-6 shadow-2xl backdrop-blur-sm">
+            <h2 class="text-lg font-bold font-cinzel text-amber-500 mb-4 border-b border-white/10 pb-2">Map Placement Guide</h2>
+            
+            <!-- Setup steps -->
+            <div class="space-y-4">
+                <!-- Step 1 -->
+                <div id="step-card-1" class="p-4 rounded-xl border border-blue-500/30 bg-blue-950/20 transition-all duration-300 cursor-pointer" onclick="goToStep(1)">
+                    <div class="flex items-start gap-3">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-bold shrink-0 mt-0.5">1</span>
+                        <div>
+                            <h3 class="font-bold text-white text-sm">Secure Outer Bases (6x4)</h3>
+                            <p class="text-xs text-slate-300 mt-1">Place 4 Blue Human bases in the leftmost column, and 4 Red Darkîn bases in the rightmost column. Outer columns remain completely fixed.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div id="step-card-2" class="p-4 rounded-xl border border-white/5 bg-white/5 opacity-50 transition-all duration-300 cursor-pointer" onclick="goToStep(2)">
+                    <div class="flex items-start gap-3">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-purple-500 text-white text-xs font-bold shrink-0 mt-0.5">2</span>
+                        <div>
+                            <h3 class="font-bold text-white text-sm">Assemble Neutral Landscape</h3>
+                            <p class="text-xs text-slate-300 mt-1">Prepare 16 middle tiles: 8 barren Normal Lands (blank) and 8 Herb Lands marked with colored plant icons.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div id="step-card-3" class="p-4 rounded-xl border border-white/5 bg-white/5 opacity-50 transition-all duration-300 cursor-pointer" onclick="goToStep(3)">
+                    <div class="flex items-start gap-3">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-bold shrink-0 mt-0.5">3</span>
+                        <div>
+                            <h3 class="font-bold text-white text-sm">Shuffle & Randomize</h3>
+                            <p class="text-xs text-slate-300 mt-1">Mix all 16 middle tiles and deal them into the empty slots. Hover over tiles to inspect gathering targets.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="mt-6 pt-5 border-t border-white/10 flex flex-col gap-3">
+                <button id="btn-action" onclick="handlePrimaryAction()" class="w-full py-3 px-4 bg-gradient-to-r from-amber-600 to-yellow-500 text-black font-bold rounded-xl shadow-lg hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/></svg>
+                    <span>Proceed to Step 2</span>
+                </button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="btn-prev" onclick="prevStep()" class="py-2 px-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 text-xs font-semibold disabled:opacity-30" disabled>
+                        ← Back
+                    </button>
+                    <button id="btn-next" onclick="nextStep()" class="py-2 px-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 text-xs font-semibold">
+                        Next →
+                    </button>
+                </div>
+            </div>
+
+            <!-- Legend Info Card -->
+            <div class="mt-5 p-4 rounded-xl bg-black/40 border border-white/5 text-[11px] text-slate-400 space-y-2.5">
+                <div class="font-semibold text-white uppercase tracking-wider text-[9px]">Tile Legend</div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3.5 h-3.5 hex-clip bg-blue-600 inline-block"></span>
+                    <span><strong>Human Base (4 Tiles)</strong> - Left Column (Fixed)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3.5 h-3.5 hex-clip bg-red-700 inline-block"></span>
+                    <span><strong>Darkîn Base (4 Tiles)</strong> - Right Column (Fixed)</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3.5 h-3.5 hex-clip bg-zinc-800 inline-block"></span>
+                    <span><strong>Normal Land (8 Tiles)</strong> - Blank Gray Plain</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3.5 h-3.5 hex-clip bg-slate-800 border border-amber-500/20 flex items-center justify-center text-[8px] inline-block text-emerald-400">🌿</span>
+                    <span><strong>Herb Land (8 Tiles)</strong> - Represented by plant icons</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Side: Grid Canvas -->
+        <div class="lg:col-span-7 flex flex-col items-center">
+            
+            <!-- Information Indicator -->
+            <div class="w-full max-w-[620px] bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 mb-4 flex justify-between items-center text-xs">
+                <div>
+                    <span class="text-slate-400">Fixed Bases:</span>
+                    <strong class="text-white ml-1">4 Blue (Left) / 4 Red (Right)</strong>
+                </div>
+                <div class="h-4 w-px bg-white/10"></div>
+                <div>
+                    <span class="text-slate-400">Normal Plains:</span>
+                    <strong id="counter-normal" class="text-slate-300 ml-1">0 / 8</strong>
+                </div>
+                <div class="h-4 w-px bg-white/10"></div>
+                <div>
+                    <span class="text-slate-400">Herb Wilds:</span>
+                    <strong id="counter-herbs" class="text-emerald-400 ml-1">0 / 8</strong>
+                </div>
+            </div>
+
+            <!-- The Grid Container -->
+            <div class="board-container shadow-2xl relative">
+                <!-- Hover/Details Tooltip -->
+                <div id="tile-info" class="tile-tooltip absolute bg-slate-900/95 border border-amber-500/30 text-white rounded-lg p-3 text-xs shadow-xl opacity-0 z-50 pointer-events-none w-48 transition-all">
+                    <div id="tooltip-title" class="font-bold font-cinzel text-amber-400 text-sm"></div>
+                    <div id="tooltip-desc" class="text-slate-300 mt-1"></div>
+                </div>
+
+                <div class="hex-grid" id="board-grid">
+                    <!-- Hex components injected here -->
+                </div>
+            </div>
+
+            <div class="mt-4 text-center">
+                <p class="text-xs text-slate-500 italic">💡 Hover over any tile to view its name, description, and target value</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full py-4 text-center text-xs text-slate-600 border-t border-white/5 bg-black/20 mt-8">
+        &copy; 2026 Darkîn Setup Simulator. All rights reserved.
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+        const boardGrid = document.getElementById('board-grid');
+        const tileInfo = document.getElementById('tile-info');
+        const tooltipTitle = document.getElementById('tooltip-title');
+        const tooltipDesc = document.getElementById('tooltip-desc');
+
+        let currentStep = 1;
+        let middleTilesPool = [];
+        let isDealing = false;
+
+        // Custom Sound Generator via Web Audio API
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playTileDropSound(freqOffset = 0) {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(170 + freqOffset, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.12);
+            
+            gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.13);
+        }
+
+        // SVG templates for Herb icons
+        const herbSVGs = {
+            A: `<svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m12.728 12.728l-.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"/></svg>`,
+            B: `<svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>`,
+            C: `<svg class="w-6 h-6 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>`,
+            D: `<svg class="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.907c.961 0 1.36 1.246.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.572-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>`,
+            E: `<svg class="w-6 h-6 text-fuchsia-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>`
+        };
+
+        // Strict 6 Columns * 4 Rows Landscape Grid (24 slots total)
+        // Col 0: Blue faction. Col 1-4: Middle randomized. Col 5: Red faction.
+        const slots = [
+            // Column 0: Blue starting camps
+            { r: 0, c: 0, type: 'blue', desc: 'Human Sanctuary Citadel' },
+            { r: 1, c: 0, type: 'blue', desc: 'Human Outpost Bastion' },
+            { r: 2, c: 0, type: 'blue', desc: 'Human Garrison Keep' },
+            { r: 3, c: 0, type: 'blue', desc: 'Human Frontier Tower' },
+
+            // Column 1: Middle
+            { r: 0, c: 1, type: 'middle' },
+            { r: 1, c: 1, type: 'middle' },
+            { r: 2, c: 1, type: 'middle' },
+            { r: 3, c: 1, type: 'middle' },
+
+            // Column 2: Middle
+            { r: 0, c: 2, type: 'middle' },
+            { r: 1, c: 2, type: 'middle' },
+            { r: 2, c: 2, type: 'middle' },
+            { r: 3, c: 2, type: 'middle' },
+
+            // Column 3: Middle
+            { r: 0, c: 3, type: 'middle' },
+            { r: 1, c: 3, type: 'middle' },
+            { r: 2, c: 3, type: 'middle' },
+            { r: 3, c: 3, type: 'middle' },
+
+            // Column 4: Middle
+            { r: 0, c: 4, type: 'middle' },
+            { r: 1, c: 4, type: 'middle' },
+            { r: 2, c: 4, type: 'middle' },
+            { r: 3, c: 4, type: 'middle' },
+
+            // Column 5: Red starting shrines
+            { r: 0, c: 5, type: 'red', desc: 'Darkîn Dread Spire' },
+            { r: 1, c: 5, type: 'red', desc: 'Darkîn Overlord Sanctum' },
+            { r: 2, c: 5, type: 'red', desc: 'Darkîn Abyss Fissure' },
+            { r: 3, c: 5, type: 'red', desc: 'Darkîn Chaos Shrine' }
+        ];
+
+        // 8 Herbs, 8 Normal terrains (Totaling 16 middle slots)
+        const herbPool = [
+            { type: 'herb', name: 'Sage Blossom (Herb A)', target: '3+', iconKey: 'A', bg: 'from-slate-800 to-slate-900', desc: 'High-yield healing blossom. Simple to gather.' },
+            { type: 'herb', name: 'Sage Blossom (Herb A)', target: '3+', iconKey: 'A', bg: 'from-slate-800 to-slate-900', desc: 'High-yield healing blossom. Simple to gather.' },
+            { type: 'herb', name: 'Ginger Root (Herb B)', target: '4+', iconKey: 'B', bg: 'from-slate-800 to-slate-900', desc: 'Deeply nested underground roots. Highly nutritious.' },
+            { type: 'herb', name: 'Ginger Root (Herb B)', target: '4+', iconKey: 'B', bg: 'from-slate-800 to-slate-900', desc: 'Deeply nested underground roots. Highly nutritious.' },
+            { type: 'herb', name: 'Lavender Sprig (Herb C)', target: '5+', iconKey: 'C', bg: 'from-slate-800 to-slate-900', desc: 'Fragrant lavender sprigs. Moderately hard to secure.' },
+            { type: 'herb', name: 'Lavender Sprig (Herb C)', target: '5+', iconKey: 'C', bg: 'from-slate-800 to-slate-900', desc: 'Fragrant lavender sprigs. Moderately hard to secure.' },
+            { type: 'herb', name: 'Dark Ginseng (Herb D)', target: '6+', iconKey: 'D', bg: 'from-slate-800 to-slate-900', desc: 'Extremely rare roots. Protected by hostile ecosystem.' },
+            { type: 'herb', name: 'Crescent Lotus (Herb E)', target: '5+', iconKey: 'E', bg: 'from-slate-800 to-slate-900', desc: 'Swamp lotus. Grows in muddy water pools.' }
+        ];
+
+        const normalPool = [
+            { type: 'normal', name: 'Barren Lowlands', target: 'N/A', iconKey: null, bg: 'from-zinc-800/80 to-zinc-900/80', desc: 'Dry dust plains with zero harvest value.' },
+            { type: 'normal', name: 'Rocky Highlands', target: 'N/A', iconKey: null, bg: 'from-zinc-800/80 to-zinc-900/80', desc: 'Heavy stone plains. Difficult to claim or traverse.' },
+            { type: 'normal', name: 'Cracked Basin', target: 'N/A', iconKey: null, bg: 'from-zinc-800/80 to-zinc-900/80', desc: 'Severely dehydrated ground, devoid of plant life.' },
+            { type: 'normal', name: 'Volcanic Basalt', target: 'N/A', iconKey: null, bg: 'from-zinc-800/80 to-zinc-900/80', desc: 'Black basalt bedrock. Solid ground foundation.' },
+            { type: 'normal', name: 'Deadwood Forest', target: 'N/A', iconKey: null, bg: 'from-zinc-800/80 to-zinc-900/80', desc: 'Fallen dry tree logs. Little natural shield.' },
+            { type: 'normal', name: 'Dust Plains', target: 'N/A', iconKey: null, bg: 'from-zinc-800/80 to-zinc-900/80', desc: 'Wasteland covered in grey ash particles.' },
+            { type: 'normal', name: 'Silty Riverbed', target: 'N/A', iconKey: null, bg: 'from-zinc-800/80 to-zinc-900/80', desc: 'Dry silt bed of an ancient dried-up river.' },
+            { type: 'normal', name: 'Ash Dunes', target: 'N/A', iconKey: null, bg: 'from-zinc-800/80 to-zinc-900/80', desc: 'Piles of unstable ash sand.' }
+        ];
+
+        // Shuffle
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function initSetup() {
+            const combined = [...herbPool, ...normalPool];
+            middleTilesPool = shuffle(combined);
+            buildBoardDOM();
+        }
+
+        // Align columns horizontally (6 columns), stagger vertically (4 rows)
+        function getHexCoords(r, c) {
+            const hGap = 16.5; // Spacing horizontally (0% to 82.5%)
+            const vGap = 20;   // Spacing vertically
+            
+            const left = c * hGap;
+            // Shift odd columns downwards to lock hexagon corners elegantly
+            const topOffset = (c % 2 === 1) ? vGap / 2 : 0;
+            const top = (r * vGap) + topOffset;
+            
+            return { left: `${left + 1}%`, top: `${top + 5}%` };
+        }
+
+        function buildBoardDOM() {
+            boardGrid.innerHTML = '';
+            let midIndex = 0;
+
+            slots.forEach((slot, index) => {
+                const tileObj = document.createElement('div');
+                const coords = getHexCoords(slot.r, slot.c);
+                
+                tileObj.style.left = coords.left;
+                tileObj.style.top = coords.top;
+                tileObj.id = `tile-${index}`;
+                tileObj.classList.add('hex-tile', 'hex-clip');
+
+                let bgGradient = '';
+                let borderStyle = 'border-white/5';
+                let typeLabel = '';
+                let tileName = '';
+                let targetInfo = '';
+                let detailText = '';
+                let innerSVG = '';
+
+                if (slot.type === 'blue') {
+                    tileObj.classList.add('blue-territory', 'revealed');
+                    bgGradient = 'from-blue-600 to-indigo-800';
+                    borderStyle = 'border-blue-400/50';
+                    typeLabel = 'Human Citadel';
+                    tileName = slot.desc;
+                    targetInfo = 'Starter Base';
+                    detailText = 'Fixed camp. Starting area for the Human forces.';
+                } else if (slot.type === 'red') {
+                    tileObj.classList.add('red-territory', 'revealed');
+                    bgGradient = 'from-red-600 to-red-900';
+                    borderStyle = 'border-red-500/50';
+                    typeLabel = 'Darkîn Keep';
+                    tileName = slot.desc;
+                    targetInfo = 'Starter Base';
+                    detailText = 'Fixed camp. Origin point of the spreading corruption.';
+                } else {
+                    const activeTileData = middleTilesPool[midIndex];
+                    tileObj.classList.add('middle-territory', 'in-deck');
+                    tileObj.dataset.midIndex = midIndex;
+                    
+                    bgGradient = activeTileData.bg;
+                    borderStyle = 'border-white/10';
+                    typeLabel = activeTileData.type === 'herb' ? 'Neutral Herb Plain' : 'Normal Wasteland';
+                    tileName = activeTileData.name;
+                    targetInfo = activeTileData.target !== 'N/A' ? `Target: ${activeTileData.target}` : 'Neutral Territory';
+                    detailText = activeTileData.desc;
+
+                    if (activeTileData.type === 'herb' && activeTileData.iconKey) {
+                        innerSVG = herbSVGs[activeTileData.iconKey];
+                    }
+                    midIndex++;
+                }
+
+                // Clean-layout style: no text printed on any tile. Only icons/backgrounds.
+                tileObj.innerHTML = `
+                    <div class="w-full h-full bg-gradient-to-br ${bgGradient} border-t border-b ${borderStyle} flex items-center justify-center relative shadow-inner">
+                        ${innerSVG ? `<div class="filter drop-shadow-md animate-pulse">${innerSVG}</div>` : ''}
+                    </div>
+                `;
+
+                // Hover Tooltip Interactions
+                tileObj.addEventListener('mouseenter', (e) => {
+                    const rect = tileObj.getBoundingClientRect();
+                    const containerRect = boardGrid.getBoundingClientRect();
+                    
+                    tooltipTitle.innerText = tileName;
+                    tooltipDesc.innerHTML = `
+                        <span class="inline-block text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-white/10 mb-1 text-amber-300">${typeLabel}</span>
+                        <div class="mt-1 text-slate-300 font-medium">${detailText}</div>
+                        <div class="mt-1.5 font-bold text-yellow-400">${targetInfo !== 'Neutral Territory' && targetInfo !== 'Starter Base' ? '🎯 ' + targetInfo : targetInfo}</div>
+                    `;
+                    
+                    tileInfo.style.opacity = '1';
+                    
+                    const leftPos = rect.left - containerRect.left + (rect.width / 2) - 96;
+                    const topPos = rect.top - containerRect.top - 120;
+                    tileInfo.style.left = `${leftPos}px`;
+                    tileInfo.style.top = `${topPos}px`;
+                });
+
+                tileObj.addEventListener('mouseleave', () => {
+                    tileInfo.style.opacity = '0';
+                });
+
+                boardGrid.appendChild(tileObj);
+            });
+        }
+
+        function handlePrimaryAction() {
+            if (isDealing) return;
+            
+            if (currentStep === 1) {
+                goToStep(2);
+            } else if (currentStep === 2) {
+                goToStep(3);
+            } else {
+                initSetup();
+                goToStep(3);
+            }
+        }
+
+        function goToStep(step) {
+            if (isDealing) return;
+            currentStep = step;
+
+            for (let i = 1; i <= 3; i++) {
+                const card = document.getElementById(`step-card-${i}`);
+                if (i === step) {
+                    card.classList.remove('opacity-50', 'bg-white/5', 'border-white/5');
+                    card.classList.add('border-amber-500/30', 'bg-amber-500/5', 'opacity-100');
+                } else {
+                    card.classList.add('opacity-50', 'bg-white/5', 'border-white/5');
+                    card.classList.remove('border-amber-500/30', 'bg-amber-500/5', 'opacity-100');
+                }
+            }
+
+            const prevBtn = document.getElementById('btn-prev');
+            const nextBtn = document.getElementById('btn-next');
+            const actionText = document.querySelector('#btn-action span');
+
+            prevBtn.disabled = step === 1;
+            nextBtn.disabled = step === 3;
+
+            if (step === 1) {
+                actionText.innerText = "Proceed to Step 2";
+                resetToStep1();
+            } else if (step === 2) {
+                actionText.innerText = "Deal Random Tiles";
+                resetToStep2();
+            } else if (step === 3) {
+                actionText.innerText = "Reshuffle & Deal Board";
+                triggerDealAnimation();
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 1) goToStep(currentStep - 1);
+        }
+
+        function nextStep() {
+            if (currentStep < 3) goToStep(currentStep + 1);
+        }
+
+        function resetToStep1() {
+            slots.forEach((slot, index) => {
+                const el = document.getElementById(`tile-${index}`);
+                if (!el) return;
+                
+                if (slot.type === 'middle') {
+                    el.classList.add('in-deck');
+                } else {
+                    el.classList.remove('in-deck');
+                }
+            });
+            updateStats(0, 0);
+        }
+
+        function resetToStep2() {
+            resetToStep1();
+        }
+
+        function triggerDealAnimation() {
+            isDealing = true;
+            document.getElementById('btn-action').disabled = true;
+            document.getElementById('btn-prev').disabled = true;
+            document.getElementById('btn-next').disabled = true;
+
+            const midTiles = Array.from(document.querySelectorAll('.hex-tile.middle-territory'));
+            midTiles.forEach(tile => tile.classList.add('in-deck'));
+
+            let currentDealIdx = 0;
+            let normalDealt = 0;
+            let herbsDealt = 0;
+
+            function dealNext() {
+                if (currentDealIdx >= midTiles.length) {
+                    isDealing = false;
+                    document.getElementById('btn-action').disabled = false;
+                    document.getElementById('btn-prev').disabled = false;
+                    document.getElementById('btn-next').disabled = false;
+                    return;
+                }
+
+                const tileEl = midTiles[currentDealIdx];
+                tileEl.classList.remove('in-deck');
+                tileEl.classList.add('revealed');
+
+                playTileDropSound(currentDealIdx * 8);
+
+                const activeDataIdx = parseInt(tileEl.dataset.midIndex);
+                const activeData = middleTilesPool[activeDataIdx];
+                if (activeData.type === 'herb') {
+                    herbsDealt++;
+                } else {
+                    normalDealt++;
+                }
+                updateStats(normalDealt, herbsDealt);
+
+                currentDealIdx++;
+                setTimeout(dealNext, 100);
+            }
+
+            setTimeout(dealNext, 200);
+        }
+
+        function updateStats(normal, herbs) {
+            document.getElementById('counter-normal').innerText = `${normal} / 8`;
+            document.getElementById('counter-herbs').innerText = `${herbs} / 8`;
+        }
+
+        window.onload = () => {
+            initSetup();
+            resetToStep1();
+        };
+    </script>
+</body>
+</html>
